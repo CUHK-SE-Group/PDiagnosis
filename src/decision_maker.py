@@ -161,6 +161,7 @@ def check_submission(data):
     #     metric_cache.append(data)
     #     return False
     # commit_answer(ans_cmdb, ans_kpi | ans_log)
+    save_result(ans_cmdb, ans_kpi | ans_log)
     last_submission = timestamp
     print(log_cache)
     print(
@@ -247,6 +248,6 @@ if __name__ == '__main__':
                 target=trace_based_anomaly_detection_entrance, args=(config,)
             )
             thread_t.start()
-        thread_monitor = threading.Thread(target=monitor_m)
-        thread_monitor.start()
+        #thread_monitor = threading.Thread(target=monitor_m)
+        #thread_monitor.start()
         app.run(port=config['decision_port'])
