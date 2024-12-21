@@ -1,0 +1,26 @@
+{
+    "configurations": [
+        {
+            "type": "debugpy",
+            "request": "launch",
+            "name": "Launch Decision Maker",
+            "program": "${workspaceFolder}/src/decision_maker.py",
+            "args": [
+                "${input:configFile}"
+            ],
+            "console": "integratedTerminal"
+        }
+    ],
+    "inputs": [
+        {
+            "type": "pickString",
+            "id": "configFile",
+            "description": "Select the configuration file",
+            "options": [
+                "src/config/system_a.json",
+                "src/config/system_b.json",
+                "src/config/train-ticket.json"
+            ]
+        }
+    ]
+}
