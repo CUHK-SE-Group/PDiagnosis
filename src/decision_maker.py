@@ -11,7 +11,8 @@ from flask import request
 
 from log.log import log_based_anomaly_detection_entrance
 from metrics.metrics import metric_monitor
-from trace import trace_entrance
+from trace.trace_entrance import trace_based_anomaly_detection_entrance
+
 
 app = Flask(__name__)
 log = logging.getLogger('werkzeug')
@@ -221,7 +222,7 @@ if __name__ == '__main__':
                                     args=(config,))
         thread_l.start()
         if config['use_trace']:
-            thread_t = threading.Thread(target=trace_entrance.trace_based_anomaly_detection_entrance, args=(config,))
+            thread_t = threading.Thread(target=trace_based_anomaly_detection_entrance, args=(config,))
             thread_t.start()
         thread_monitor = threading.Thread(target=monitor_m)
         thread_monitor.start()
