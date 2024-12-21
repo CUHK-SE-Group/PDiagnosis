@@ -1,0 +1,38 @@
+{
+  "history_length": 10,
+  "kde_threshold": 0.26,
+  "submit_anomaly_threshold": 300,
+  "submit_span_threshold": 120,
+  "anomaly_num_threshold": 5,
+
+  "kpi_group": {
+    "filesystem": [
+      "k8s.pod.filesystem.capacity",
+      "k8s.pod.filesystem.usage"
+    ],
+    "mem": [
+      "k8s.pod.memory.usage",
+      "k8s.pod.memory_limit_utilization"
+    ],
+    "cpu": [
+      "k8s.pod.cpu.usage",
+      "k8s.pod.cpu_limit_utilization"
+    ],
+    "network": [
+      "k8s.pod.network.errors",
+      "k8s.pod.network.io"
+    ]
+  },
+  "kafka_address": [
+  ],
+  "kpi_topic": "a-kpi",
+  "metric_path": "ts-train-service-1122-1151/normal/metrics.csv",
+  "trace_path": "ts-train-service-1122-1151/normal/traces.csv",
+  "log_path": "ts-train-service-1122-1151/normal/logs.csv",
+  "kpi_ignore_keyword": [
+  ],
+  "decision_port": 5000,
+  "log_keyword": "error",
+  "use_trace": true,
+  "submission_limit": 13
+}

@@ -4,3 +4,4 @@ scikit-learn>=1.0
 kafka-python>=2.0
 flask>=2.0
 requests>=2.26
+pandas==2.0.3

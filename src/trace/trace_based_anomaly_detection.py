@@ -38,7 +38,7 @@ class TraceModel:
         main_key = 'null'
         anomaly_time = self.anomaly_time
         # print (int(timestamp.strip())-int(self.anomaly_time.strip()))
-        if int(timestamp.strip()) > int(self.anomaly_time.strip()) + 300000:
+        if int(timestamp) > int(self.anomaly_time) + 300000:
             # print (self.anomaly_count)
             main_key = ''
             max = 0

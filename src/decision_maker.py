@@ -1,18 +1,16 @@
+import csv
 import json
 import logging
 import sys
 import threading
 import time
 from collections import Counter
-
-import requests
-from flask import Flask
-from flask import request
-
-from log.log import log_based_anomaly_detection_entrance
-from metrics.metrics import metric_monitor
 from trace.trace_entrance import trace_based_anomaly_detection_entrance
 
+import requests
+from flask import Flask, request
+from log.log import log_based_anomaly_detection_entrance
+from metrics.metrics import metric_monitor
 
 app = Flask(__name__)
 log = logging.getLogger('werkzeug')
@@ -37,7 +35,10 @@ def to_string_date(now_stamp):
 def generate_ans_log(now, cmdb):
     res = set()
     for log in log_cache:
-        if log['timestamp'] > now or now - log['timestamp'] < config['submit_anomaly_threshold']:
+        if (
+            log['timestamp'] > now
+            or now - log['timestamp'] < config['submit_anomaly_threshold']
+        ):
             if log['cmdb_id'] == cmdb:
                 res.add(log['logname'])
     log_now = log_cache[:]
@@ -80,15 +81,24 @@ def commit_answer(ans_cmdb, ans_kpi):
 # 官方提供的submit
 def submit(ctx):
     global config
-    assert (isinstance(ctx, list))
+    assert isinstance(ctx, list)
     for tp in ctx:
-        assert (isinstance(tp, list))
-        assert (len(tp) == 2)
-        assert (isinstance(tp[0], str))
-        assert (isinstance(tp[1], str) or (tp[1] is None))
+        assert isinstance(tp, list)
+        assert len(tp) == 2
+        assert isinstance(tp[0], str)
+        assert isinstance(tp[1], str) or (tp[1] is None)
     data = {'content': json.dumps(ctx)}
     r = requests.post(config['commit_address'], data=json.dumps(data))
     return r.text
+
+
+def save_result(ans_cmdb, ans_kpi):
+    answer = [[ans_cmdb, k] for k in ans_kpi]
+    with open('result.csv', 'w', newline='') as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(['level', 'result', 'rank', 'confidence'])
+        for rank, (service, score) in enumerate(answer, start=1):
+            writer.writerow(['service', service, rank, score])
 
 
 # 决定是否提交
@@ -122,7 +132,9 @@ def check_submission(data):
         metric_cache.append(data)
         return False
     # 持续时间
-    anomaly_time_span = metric_cache[-1]['timestamp'] - metric_cache[0]['timestamp']
+    anomaly_time_span = (
+        metric_cache[-1]['timestamp'] - metric_cache[0]['timestamp']
+    )
     # 持续时间长于阈值才开始提交，设置为60则表明至少采集2分钟数据,120表示3分钟，等等
     if anomaly_time_span < config['submit_span_threshold']:
         metric_cache.append(data)
@@ -148,11 +160,14 @@ def check_submission(data):
     #     metric_cache.clear()
     #     metric_cache.append(data)
     #     return False
-    commit_answer(ans_cmdb, ans_kpi | ans_log)
+    # commit_answer(ans_cmdb, ans_kpi | ans_log)
     last_submission = timestamp
     print(log_cache)
     print(
-        '[COMMIT]: {}, {} commit {}, KPI:{}'.format(to_string_date(timestamp), str(submission), ans_cmdb, str(ans_kpi)))
+        '[COMMIT]: {}, {} commit {}, KPI:{}'.format(
+            to_string_date(timestamp), str(submission), ans_cmdb, str(ans_kpi)
+        )
+    )
     metric_cache.clear()
     return True
 
@@ -184,7 +199,7 @@ def log_handle():
     a = request.get_data()
     data = json.loads(a)
     log_cache.append(data)
-    print('[LOG] Received:' + data)
+    #print('[LOG] Received:' + data)
     input()
     return 'success'
 
@@ -196,11 +211,16 @@ def monitor_m():
         for i in now:
             nowThreadsName.append(i.getName())
         if 'metric_thread' in nowThreadsName:
-            print(time.strftime("%Y-%m-%d %H:%M:%S ", time.localtime()) + 'metric thread alive')
+            print(
+                time.strftime("%Y-%m-%d %H:%M:%S ", time.localtime())
+                + 'metric thread alive'
+            )
             pass
         else:
             print('stopped，now restart')
-            t = threading.Thread(target=metric_monitor, args=(config,))  # 重启线程
+            t = threading.Thread(
+                target=metric_monitor, args=(config,)
+            )  # 重启线程
             t.setName('metric_thread')  # 重设name
             t.start()
         time.sleep(180)
@@ -218,11 +238,14 @@ if __name__ == '__main__':
         thread_m = threading.Thread(target=metric_monitor, args=(config,))
         thread_m.setName('metric_thread')
         thread_m.start()
-        thread_l = threading.Thread(target=log_based_anomaly_detection_entrance,
-                                    args=(config,))
+        thread_l = threading.Thread(
+            target=log_based_anomaly_detection_entrance, args=(config,)
+        )
         thread_l.start()
         if config['use_trace']:
-            thread_t = threading.Thread(target=trace_based_anomaly_detection_entrance, args=(config,))
+            thread_t = threading.Thread(
+                target=trace_based_anomaly_detection_entrance, args=(config,)
+            )
             thread_t.start()
         thread_monitor = threading.Thread(target=monitor_m)
         thread_monitor.start()

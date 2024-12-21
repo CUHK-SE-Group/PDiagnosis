@@ -1,9 +1,11 @@
 import json
 import time
+from datetime import datetime, timedelta
 
+import pandas as pd
 import requests
-from kafka import KafkaConsumer
 
+from consumer import CSVConsumer
 from util import detection
 
 # Metrics异常检测模块
@@ -32,8 +34,11 @@ def is_normal_kpi_type(kpi_name):
 
 
 # 将检测到的异常发送给Decision Maker
-def send_to_decision_maker(data):
-    requests.post('http://127.0.0.1:' + str(config['decision_port']) + '/metric', json.dumps(data))
+def send_to_decision_maker(data: pd.Series):
+    requests.post(
+        'http://127.0.0.1:' + str(config['decision_port']) + '/metric',
+        data.to_json(),
+    )
 
 
 # 将获得的数据写入内存
@@ -62,7 +67,13 @@ def anomaly_check(data):
     # if cmdb_id == 'gjjha2' and kpi_name == 'system.net.bytes_sent':
     #     print(p_value, data)
     #     print(history_list)
-    conclusion = p_value < config['kde_threshold'] and not_in_range and sigma_value and change_mean and error_value
+    conclusion = (
+        p_value < config['kde_threshold']
+        and not_in_range
+        and sigma_value
+        and change_mean
+        and error_value
+    )
     return p_value, conclusion  # 阈值之后调节
 
 
@@ -91,16 +102,41 @@ def metric_monitor(conf):
     global config
     config = conf
 
-    CONSUMER = KafkaConsumer(config["metric_topic"],
-                             bootstrap_servers=config["kafka_address"],
-                             auto_offset_reset='latest',
-                             enable_auto_commit=False,
-                             security_protocol='PLAINTEXT')
+    CONSUMER = CSVConsumer(config["metric_path"])
 
     print('Metric Monitor Running')
+    INCLUDE_METRIC_NAME = [
+        kpi for group in config["kpi_group"].values() for kpi in group
+    ]
+    CONSUMER.data = CONSUMER.data[
+        CONSUMER.data['MetricName'].isin(INCLUDE_METRIC_NAME)
+    ]
+    # Replace metric names based on direction
+    CONSUMER.data.loc[
+        CONSUMER.data['MetricName'] == 'k8s.pod.network.io', 'MetricName'
+    ] = CONSUMER.data.loc[
+        CONSUMER.data['MetricName'] == 'k8s.pod.network.io', 'direction'
+    ].map(
+        {'transmit': 'transmit_bytes', 'receive': 'receive_bytes'}
+    )
 
-    for message in CONSUMER:
-        data = json.loads(message.value.decode('utf8'))
+    CONSUMER.data.rename(
+        columns={
+            'TimeUnix': 'timestamp',
+            'k8s_pod_name': 'cmdb_id',
+            'MetricName': 'kpi_name',
+            'Value': 'value',
+        },
+        inplace=True,
+    )
+
+    def clean_cmdb_id(cmdb_id):
+        parts = cmdb_id.split('-')
+        return '-'.join(parts[:3])
+
+    CONSUMER.data['cmdb_id'] = CONSUMER.data['cmdb_id'].apply(clean_cmdb_id)
+
+    for index, data in CONSUMER.data.iterrows():
         timestamp = data['timestamp']
         cmdb_id = data['cmdb_id']
         kpi_name = data['kpi_name']
@@ -116,8 +152,16 @@ def metric_monitor(conf):
                 # send_to_decision_maker(data)
                 if is_normal_kpi_type(kpi_name):
                     if long_term_check(data):
-                        print('Anomaly Time:{} CMDB:{} KPI:{} Value:{} P-value:{} History:{}'
-                              .format(to_string_date(timestamp), cmdb_id, kpi_name, value, p, history_list))
+                        print(
+                            'Anomaly Time:{} CMDB:{} KPI:{} Value:{} P-value:{} History:{}'.format(
+                                to_string_date(timestamp),
+                                cmdb_id,
+                                kpi_name,
+                                value,
+                                p,
+                                history_list,
+                            )
+                        )
                         send_to_decision_maker(data)
                         # 如果异常则不保存数据
                         continue
