@@ -1,4 +1,5 @@
 import json
+import sys
 import time
 from datetime import datetime, timedelta
 
@@ -38,6 +39,12 @@ def send_to_decision_maker(data: pd.Series):
     requests.post(
         'http://127.0.0.1:' + str(config['decision_port']) + '/metric',
         data.to_json(),
+    )
+
+
+def shutdown():
+    requests.post(
+        'http://127.0.0.1:' + str(config['decision_port']) + '/shutdown'
     )
 
 
@@ -87,7 +94,9 @@ def long_term_check(data):
     anomaly_history = anomaly_metric[cmdb_id][kpi_name]
     history_length = len(anomaly_history)
     # 保存异常历史记录
-    if history_length == 0 or (1 <= history_length <= 6 and anomaly_history[-1] + 60 == timestamp):
+    if history_length == 0 or (
+        1 <= history_length <= 6 and anomaly_history[-1] + 60 == timestamp
+    ):
         anomaly_metric[cmdb_id][kpi_name].append(timestamp)
         return True
     # 如果指标异常连续的长于6分钟, 或有断点，则清空指标数据，重新学习
@@ -99,6 +108,7 @@ def long_term_check(data):
 # 主要函数，实时消费kafka并更新模型，预测结果
 # Thread入口
 def metric_monitor(conf):
+    time.sleep(5)  # wait for flask
     global config
     config = conf
 
@@ -167,6 +177,7 @@ def metric_monitor(conf):
                         continue
         # 检测后，将数据写入内存
         metric_stash(data)
+    shutdown()
 
 
 if __name__ == '__main__':
