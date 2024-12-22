@@ -48,3 +48,39 @@ def trace_based_anomaly_detection_entrance(config):
                         + '/trace',
                         json.dumps(send_dict),
                     )
+def trace_based_anomaly_detection(config):
+    # initiation
+    CONSUMER = CSVConsumer(config["trace_path"])
+    trace_cache = []
+    trace_parser = TraceParser()
+    trace_model = TraceModel()
+    
+    # "Timestamp", "TraceId", "SpanId", "ParentSpanId", "SpanName", "ServiceName", "Duration", "ParentServiceName"
+    CONSUMER.data.rename(
+        columns={
+            'Timestamp': 'timestamp',
+            'TraceId': 'trace_id',
+            'SpanId': 'span_id',
+            'ParentSpanId': 'parent_id',
+            'SpanName': 'span_name',
+            'ServiceName': 'cmdb_id',
+            'Duration': 'duration',
+            'ParentServiceName': 'parent_cmdb_id',
+        },
+        inplace=True,
+    )
+    for index, data in CONSUMER.data.iterrows():
+        complete_flag = trace_parser.update_trace_info(data)
+        if complete_flag == 1:
+
+            trace_model.update_model_pattern(trace_parser)
+            trace_model.add_to_q()
+            # print(json.dumps(trace_model.model))
+            if trace_model.fixed_trace_q.full():
+                main_key, anomaly_time = (
+                    trace_model.anomaly_detection_with_queue(data['timestamp'])
+                )
+                if main_key != 'null':
+                    trace_cache.append({'cmdb_id': main_key, 'timestamp': anomaly_time})
+    print('Trace Process Done')
+    return trace_cache
