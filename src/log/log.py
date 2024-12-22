@@ -22,3 +22,18 @@ def log_based_anomaly_detection_entrance(config):
                 'http://127.0.0.1:' + str(config['decision_port']) + '/log',
                 json.dumps(send_dict),
             )
+
+
+def log_based_anomaly_detection(config):
+    CONSUMER = CSVConsumer(config["log_path"])
+    CONSUMER.data = CONSUMER.data[CONSUMER.data["SeverityNumber"] == 17]
+    CONSUMER.data.rename(
+        columns={
+            "Body": "logname",
+            "ServiceName": "cmdb_id",
+            "Timestamp": "timestamp",
+        },
+        inplace=True,
+    )
+    ret = CONSUMER.data[["cmdb_id", "timestamp", "logname"]]
+    return ret
