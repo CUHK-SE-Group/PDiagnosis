@@ -1,15 +1,18 @@
 import csv
 import json
 import logging
+import os
+import signal
 import sys
 import threading
 import time
 from collections import Counter
-from trace.trace_entrance import trace_based_anomaly_detection_entrance
+from trace.trace_entrance import trace_based_anomaly_detection
 
 import requests
 from flask import Flask, request
-from log.log import log_based_anomaly_detection_entrance
+
+from log.log import log_based_anomaly_detection
 from metrics.metrics import metric_monitor
 
 app = Flask(__name__)
@@ -18,12 +21,13 @@ log.setLevel(logging.ERROR)
 
 metric_cache = []
 log_cache = []
-trace_cache = None
+trace_cache = []
 # 上次提交时间戳
 last_submission = 0
 # 总提交次数
 submission = 0
 config = {}
+running = True
 
 
 def to_string_date(now_stamp):
@@ -182,6 +186,7 @@ def hello_world():
 def trace_handle():
     a = request.get_data()
     data = json.loads(a)
+    trace_cache.append(data)
     return 'success'
 
 
@@ -200,9 +205,17 @@ def log_handle():
     a = request.get_data()
     data = json.loads(a)
     log_cache.append(data)
-    #print('[LOG] Received:' + data)
-    input()
+    # print('[LOG] Received:' + data)
+    # input()
     return 'success'
+
+
+@app.route('/shutdown', methods=['POST'])
+def shutdown():
+    global running
+    running = False
+    os.kill(os.getpid(), signal.SIGINT)
+    return json.dumps({"success": True, "message": "Server is shutting down..."})
 
 
 def monitor_m():
@@ -236,18 +249,13 @@ if __name__ == '__main__':
         config = json.load(f)
         print(config)
         threadingDict = {}
+        trace_cache = trace_based_anomaly_detection(config)
+        log_cache = log_based_anomaly_detection(config)
         thread_m = threading.Thread(target=metric_monitor, args=(config,))
         thread_m.setName('metric_thread')
         thread_m.start()
-        thread_l = threading.Thread(
-            target=log_based_anomaly_detection_entrance, args=(config,)
-        )
-        thread_l.start()
-        if config['use_trace']:
-            thread_t = threading.Thread(
-                target=trace_based_anomaly_detection_entrance, args=(config,)
-            )
-            thread_t.start()
-        #thread_monitor = threading.Thread(target=monitor_m)
-        #thread_monitor.start()
-        app.run(port=config['decision_port'])
+        try:
+            app.run(port=config['decision_port'])
+        finally:
+            running = False
+            thread_m.join()
