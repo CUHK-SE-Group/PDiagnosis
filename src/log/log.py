@@ -25,7 +25,7 @@ def log_based_anomaly_detection_entrance(config):
 
 
 def log_based_anomaly_detection(config):
-    CONSUMER = CSVConsumer(config["log_path"])
+    CONSUMER = CSVConsumer(config["base_dir"] / "normal" / "logs.csv")
     CONSUMER.data = CONSUMER.data[CONSUMER.data["SeverityNumber"] == 17]
     CONSUMER.data.rename(
         columns={

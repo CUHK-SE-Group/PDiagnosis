@@ -3,13 +3,14 @@ import json
 import requests
 
 from consumer import CSVConsumer
+
 from .trace_based_anomaly_detection import TraceModel
 from .trace_parser import TraceParser
 
 
 def trace_based_anomaly_detection_entrance(config):
     # initiation
-    CONSUMER = CSVConsumer(config["trace_path"])
+    CONSUMER = CSVConsumer(config["base_dir"] / "normal" / "traces.csv")
 
     trace_parser = TraceParser()
     trace_model = TraceModel()
@@ -36,25 +37,23 @@ def trace_based_anomaly_detection_entrance(config):
             trace_model.add_to_q()
             # print(json.dumps(trace_model.model))
             if trace_model.fixed_trace_q.full():
-                main_key, anomaly_time = (
-                    trace_model.anomaly_detection_with_queue(data['timestamp'])
-                )
+                main_key, anomaly_time = trace_model.anomaly_detection_with_queue(data['timestamp'])
                 if main_key != 'null':
                     send_dict = {'cmdb_id': main_key, 'timestamp': anomaly_time}
 
                     requests.post(
-                        'http://127.0.0.1:'
-                        + str(config['decision_port'])
-                        + '/trace',
+                        'http://127.0.0.1:' + str(config['decision_port']) + '/trace',
                         json.dumps(send_dict),
                     )
+
+
 def trace_based_anomaly_detection(config):
     # initiation
     CONSUMER = CSVConsumer(config["trace_path"])
     trace_cache = []
     trace_parser = TraceParser()
     trace_model = TraceModel()
-    
+
     # "Timestamp", "TraceId", "SpanId", "ParentSpanId", "SpanName", "ServiceName", "Duration", "ParentServiceName"
     CONSUMER.data.rename(
         columns={
@@ -77,9 +76,7 @@ def trace_based_anomaly_detection(config):
             trace_model.add_to_q()
             # print(json.dumps(trace_model.model))
             if trace_model.fixed_trace_q.full():
-                main_key, anomaly_time = (
-                    trace_model.anomaly_detection_with_queue(data['timestamp'])
-                )
+                main_key, anomaly_time = trace_model.anomaly_detection_with_queue(data['timestamp'])
                 if main_key != 'null':
                     trace_cache.append({'cmdb_id': main_key, 'timestamp': anomaly_time})
     print('Trace Process Done')

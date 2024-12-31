@@ -8,7 +8,9 @@ import threading
 import time
 from collections import Counter
 from trace.trace_entrance import trace_based_anomaly_detection
-
+from multiprocessing import Pool
+from pathlib import Path
+import toml
 import requests
 from flask import Flask, request
 
@@ -18,7 +20,7 @@ from metrics.metrics import metric_monitor
 app = Flask(__name__)
 log = logging.getLogger('werkzeug')
 log.setLevel(logging.ERROR)
-
+anomalous = []
 metric_cache = []
 log_cache = []
 trace_cache = []
@@ -98,7 +100,8 @@ def submit(ctx):
 
 def save_result(ans_cmdb, ans_kpi):
     answer = [[ans_cmdb, k] for k in ans_kpi]
-    with open('result.csv', 'w', newline='') as csvfile:
+    Path(config["base_dir"].name).mkdir(parents=True, exist_ok=True)
+    with open(config["base_dir"].name / 'result.csv', 'w', newline='') as csvfile:
         writer = csv.writer(csvfile)
         writer.writerow(['level', 'result', 'rank', 'confidence'])
         for rank, (service, score) in enumerate(answer, start=1):
@@ -166,6 +169,7 @@ def check_submission(data):
     #     return False
     # commit_answer(ans_cmdb, ans_kpi | ans_log)
     save_result(ans_cmdb, ans_kpi | ans_log)
+    anomalous.append([ans_cmdb,ans_kpi | ans_log])
     last_submission = timestamp
     print(log_cache)
     print(
@@ -247,15 +251,28 @@ if __name__ == '__main__':
     print(sys.argv[1])
     with open(sys.argv[1]) as f:
         config = json.load(f)
-        print(config)
-        threadingDict = {}
-        trace_cache = trace_based_anomaly_detection(config)
-        log_cache = log_based_anomaly_detection(config)
-        thread_m = threading.Thread(target=metric_monitor, args=(config,))
-        thread_m.setName('metric_thread')
-        thread_m.start()
-        try:
-            app.run(port=config['decision_port'])
-        finally:
-            running = False
-            thread_m.join()
+        root_base_dir = Path("/home/nn/workspace/Metis-DataSet/ts-all")
+        fault_injection_file = root_base_dir / "fault_injection.toml"
+        data = toml.load(fault_injection_file)
+        gt_list = data["chaos_injection"]
+
+        case_dirs = [p for p in root_base_dir.iterdir() if p.is_dir()]
+        for case_dir in case_dirs:
+            config["base_dir"] = case_dir
+            thread_m = threading.Thread(target=metric_monitor, args=(config,))
+            thread_m.setName('metric_thread')
+            thread_m.start()
+            try:
+                app.run(port=config['decision_port'])
+            finally:
+                running = False
+                thread_m.join()
+                print(anomalous)
+            anomalous = []
+            metric_cache = []
+            log_cache = []
+            trace_cache = []
+            # 上次提交时间戳
+            last_submission = 0
+            # 总提交次数
+            submission = 0

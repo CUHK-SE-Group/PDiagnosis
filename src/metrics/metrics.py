@@ -43,9 +43,7 @@ def send_to_decision_maker(data: pd.Series):
 
 
 def shutdown():
-    requests.post(
-        'http://127.0.0.1:' + str(config['decision_port']) + '/shutdown'
-    )
+    requests.post('http://127.0.0.1:' + str(config['decision_port']) + '/shutdown')
 
 
 # 将获得的数据写入内存
@@ -74,13 +72,7 @@ def anomaly_check(data):
     # if cmdb_id == 'gjjha2' and kpi_name == 'system.net.bytes_sent':
     #     print(p_value, data)
     #     print(history_list)
-    conclusion = (
-        p_value < config['kde_threshold']
-        and not_in_range
-        and sigma_value
-        and change_mean
-        and error_value
-    )
+    conclusion = p_value < config['kde_threshold'] and not_in_range and sigma_value and change_mean and error_value
     return p_value, conclusion  # 阈值之后调节
 
 
@@ -94,9 +86,7 @@ def long_term_check(data):
     anomaly_history = anomaly_metric[cmdb_id][kpi_name]
     history_length = len(anomaly_history)
     # 保存异常历史记录
-    if history_length == 0 or (
-        1 <= history_length <= 6 and anomaly_history[-1] + 60 == timestamp
-    ):
+    if history_length == 0 or (1 <= history_length <= 6 and anomaly_history[-1] + 60 == timestamp):
         anomaly_metric[cmdb_id][kpi_name].append(timestamp)
         return True
     # 如果指标异常连续的长于6分钟, 或有断点，则清空指标数据，重新学习
@@ -112,23 +102,15 @@ def metric_monitor(conf):
     global config
     config = conf
 
-    CONSUMER = CSVConsumer(config["metric_path"])
+    CONSUMER = CSVConsumer(config["base_dir"] / "normal" / "metrics.csv")
 
     print('Metric Monitor Running')
-    INCLUDE_METRIC_NAME = [
-        kpi for group in config["kpi_group"].values() for kpi in group
-    ]
-    CONSUMER.data = CONSUMER.data[
-        CONSUMER.data['MetricName'].isin(INCLUDE_METRIC_NAME)
-    ]
+    INCLUDE_METRIC_NAME = [kpi for group in config["kpi_group"].values() for kpi in group]
+    CONSUMER.data = CONSUMER.data[CONSUMER.data['MetricName'].isin(INCLUDE_METRIC_NAME)]
     # Replace metric names based on direction
-    CONSUMER.data.loc[
-        CONSUMER.data['MetricName'] == 'k8s.pod.network.io', 'MetricName'
-    ] = CONSUMER.data.loc[
+    CONSUMER.data.loc[CONSUMER.data['MetricName'] == 'k8s.pod.network.io', 'MetricName'] = CONSUMER.data.loc[
         CONSUMER.data['MetricName'] == 'k8s.pod.network.io', 'direction'
-    ].map(
-        {'transmit': 'transmit_bytes', 'receive': 'receive_bytes'}
-    )
+    ].map({'transmit': 'transmit_bytes', 'receive': 'receive_bytes'})
 
     CONSUMER.data.rename(
         columns={
@@ -145,7 +127,7 @@ def metric_monitor(conf):
         return '-'.join(parts[:3])
 
     CONSUMER.data['cmdb_id'] = CONSUMER.data['cmdb_id'].apply(clean_cmdb_id)
-
+    metric_cache = []
     for index, data in CONSUMER.data.iterrows():
         timestamp = data['timestamp']
         cmdb_id = data['cmdb_id']
@@ -172,12 +154,23 @@ def metric_monitor(conf):
                                 history_list,
                             )
                         )
-                        send_to_decision_maker(data)
+                        metric_cache.append(data)
                         # 如果异常则不保存数据
                         continue
         # 检测后，将数据写入内存
         metric_stash(data)
-    shutdown()
+
+    # os.makedirs(config["base_dir"].name, exist_ok=True)
+    # pd.DataFrame(metric_cache).to_csv(Path(config["base_dir"].name) / "result.csv", index=False)
+    res = (
+        pd.DataFrame(metric_cache)
+        .groupby('cmdb_id')
+        .agg(timestamp_min=('timestamp', 'min'), timestamp_max=('timestamp', 'max'), count=('cmdb_id', 'count'))
+        .reset_index()
+        .sort_values(by='count', ascending=False)
+    )
+    res["rank"] = res["count"].rank(method='dense', ascending=False).astype(int)
+    return res
 
 
 if __name__ == '__main__':
