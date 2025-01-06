@@ -27,7 +27,7 @@ log.setLevel(logging.ERROR)
 
 
 def evaluate(case_dir: Path):
-    with open('config/train-ticket.json') as f:
+    with open('/home/nn/workspace/PDiagnosis/src/config/train-ticket.json') as f:
         config = json.load(f)
         config["base_dir"] = case_dir
         # log_cache = log_based_anomaly_detection(config)
@@ -60,9 +60,9 @@ def f1_score(predicted_range, ground_truth_range):
     """
     predicted_start, predicted_end = predicted_range
     truth_start, truth_end = ground_truth_range
-    predicted_start, predicted_end, truth_start, truth_end = map(
+    truth_start, truth_end = map(
         lambda x: int(pd.to_datetime(x).as_unit("s").timestamp()),
-        [predicted_start, predicted_end, truth_start, truth_end],
+        [truth_start, truth_end],
     )
     # Calculate overlap (True Positive)
     if calculate_overlap(predicted_start, predicted_end, truth_start, truth_end):
